@@ -11,3 +11,6 @@
 - Every list view gets a designed empty state, not a blank page.
 - Styling is Tailwind + DaisyUI classes only; no crispy-forms, no JavaScript
   beyond HTMX.
+
+
+- Every data table uses the DaisyUI `table` class inside an `overflow-x-auto` wrapper, with column headings inside a `<thead>`.
