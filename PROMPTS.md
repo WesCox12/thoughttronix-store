@@ -28,6 +28,92 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-15 — Implement product images (Phases 1–5) and fix the 21 stale coupon-era tests
+
+### Prompts
+1. Follow the approved implementation plan, beginning with Phase 1.
+2. Phase 1 browser verification passed. Seraphine's uploaded image appears correctly. Proceed with Phase 2 of plans/product-images.md.
+3. Proceed with Phase 3 of plans/product-images.md
+4. Proceed with Phase 4 of plans/product-images.md
+5. Proceed with Phase 5 of plans/product-images.md.
+6. Now investigate the 21 remaining pre-existing coupon test failures. Identify their root causes and fix them without weakening the tests or changing intended coupon functionality. Keep these changes separate from the product-image feature. Run the full test suite and Ruff checks. Do not commit or push anything yet. Stop and report the results.
+7. Append a session log to PROMPTS.md at the repo root, under today's date, newest entry at the top. Record every prompt I gave you this session, in order, including any corrections. End the entry with a short summary: the outcome, any places where I deviated from a recommended answer or asked follow-up questions, and anything that went sideways.
+
+### Summary
+- **Outcome:** All five phases of `plans/product-images.md` are
+  implemented, and nothing is committed yet.
+  - **Phase 1:** added Pillow, the media settings, the `Product.image`
+    field, `display_image_url`, square navy frames on the storefront, a
+    form that accepts file uploads, and the `media_root` /
+    `make_image_upload` test helpers.
+  - **Phase 2:** the upload rules live in `products/validators.py`. A
+    small new file, `products/fields.py`, puts the readable "isn't a
+    usable image" message (and the `accept` file-type list) into both the
+    back-office form and the Django admin.
+  - **Phase 3:** new uploads become 800×800 navy-padded WebP files in
+    `Product.save()`. Old files are deleted only after the database
+    commits, using `transaction.on_commit` and a `post_delete` receiver.
+  - **Phase 4:** an image preview on the edit page and a thumbnail column
+    in the product list.
+  - **Phase 5:** 12 seed images live in `products/seed_images/`, and the
+    seed attaches them. The `product-images/` folder and the zip were
+    deleted, and the docs were updated.
+  - **Coupon follow-up:** root causes found and fixed for the 21 old test
+    failures:
+    - 20 came from three hand-built `Order` test helpers that were missing
+      the required `subtotal` field;
+    - 1 was an outdated test still expecting the core platform's "accept
+      and ignore" coupon placeholder, replaced by two tests of the current
+      coupon behaviour;
+    - Ruff's one `DJ012` error and two formatting issues in `orders/`.
+
+  Final state: 259 passed, 0 failed; Ruff check and format are clean
+  across the repo.
+- **Deviations:**
+  - At the end of Phase 1, and again at the end of Phase 4, Claude
+    recommended fixing the old coupon tests before continuing. The user
+    went ahead with the next phases instead, then asked for the coupon fix
+    as a separate task at the end (prompt 6).
+  - Claude also asked whether the list thumbnail should repeat the product
+    name as `alt` text, and whether Django's file-extension check should
+    be turned off. Both were left at Claude's defaults (empty `alt`;
+    extension check kept), because the user didn't answer either.
+- **Sideways:**
+  - The suite was already red on a clean `main` before any work started:
+    23 failures from the coupons homework, which had updated neither the
+    tests nor the seed. Claude reported this at Phase 1 and held each
+    image phase to "no new failures" until prompt 6.
+  - The seed command itself crashed for the same `subtotal` reason. It was
+    fixed in Phase 5 because the plan's seed checks needed it. That fix
+    sits in `seed.py` next to the image changes, so the two features can
+    only be committed separately by splitting that file (for example with
+    `git add -p`).
+  - The plan said to append a `PROMPTS.md` entry in Phase 5, but this
+    file's rule is "only by that prompt, never unprompted". Claude
+    followed the file's rule and waited for prompt 7.
+  - The first `ruff format .` (Phase 1) reformatted two unrelated `orders/`
+    files. They were reverted, and later runs were limited to the feature's
+    files.
+  - Phase 2: the decompression-bomb rule has two levels in Pillow, a
+    warning and an outright refusal. When Pillow refused outright,
+    Django's own image check hid the reason, so the rule needed extra
+    handling in `ProductImageFormField.to_python`.
+  - Phase 3: a test from Phase 2 (`test_already_committed_files_are_skipped`)
+    would have passed for the wrong reason once processing existed. It was
+    rewritten to write its bad file straight to storage.
+  - Phase 3: the first failed-save test couldn't tell "delete after
+    commit" apart from "delete immediately". A rolled-back-transaction
+    test was added, and both were checked against a deliberately broken
+    version that deletes immediately; the tests caught it.
+  - Phase 4: a rejected upload would have made the edit-page preview show
+    a broken link to the refused file. The preview now reads the product
+    as saved in the database. While checking that test with a deliberately
+    broken version, Claude's restore step first copied from the wrong
+    backup location, so the broken line stayed in `products/views.py`
+    until a grep caught it. It was then restored from the correct backup.
+  - A redundant second full-suite run timed out into the background and
+    was stopped.
+
 ## 2026-11-15 — Plan product images with a `/grill-me` design interview (no implementation)
 
 ### Prompts
