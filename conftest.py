@@ -1,7 +1,8 @@
 """Project-wide pytest fixtures.
 
 Shared test data lives here as plain fixtures — no factories. The suite
-grows with the project; tests never invoke the seed command.
+grows with the project; only tests specifically verifying seed behavior
+may invoke the seed command.
 """
 
 from decimal import Decimal

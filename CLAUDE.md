@@ -35,27 +35,18 @@ Logic lives in models and managers; cross-model workflows get a service
 module; views stay thin.
 
 Exactly two deliberate deep modules, docstrings and type hints on every
-public function: `orders/services.py` (`place_order`, with its dormant
-`coupon_code` seam) and `dashboard/queries.py` (the dashboard's
+public function: `orders/services.py` (`quote_cart` and `place_order`;
+details in `orders/CLAUDE.md`) and `dashboard/queries.py` (the dashboard's
 aggregations).
+
+Back-office views gate on `is_staff` with `accounts.mixins.StaffRequiredMixin`.
 
 Idiomatic Django throughout: class-based views, model methods, custom
 managers/querysets, forms own their validation. Settings read from `.env`
 via environs with working defaults — the app must run with no `.env` present.
 
-## Template conventions
-
-- Every page extends the project-level `templates/base.html` (DaisyUI navbar,
-  footer motto). DaisyUI theme: `night`, set in `assets/css/source.css` and
-  `data-theme` on `<html>`.
-- Back-office pages extend `templates/backoffice/base.html` — the staff shell
-  with the tab rail; the active tab comes from the view's `section` context
-  entry.
-- HTMX endpoints render partials from `templates/<app>/partials/_<name>.html` —
-  prefixed with an underscore, never extending `base.html`.
-- Every list view gets a designed empty state, not a blank page.
-- Styling is Tailwind + DaisyUI classes only; no crispy-forms, no JavaScript
-  beyond HTMX.
+UI is Tailwind + DaisyUI + HTMX only; template rules live in
+`templates/CLAUDE.md`.
 
 ## URL conventions
 
@@ -67,6 +58,6 @@ via environs with working defaults — the app must run with no `.env` present.
 
 ## Testing
 
-pytest + pytest-django. Shared fixtures live in the project-level
-`conftest.py` — plain fixtures, no factory-boy. Tests never invoke the seed
-command. The suite must be green at every phase boundary.
+Before writing or changing tests, read `docs/testing.md`. The suite must be
+green at every phase boundary, and the destructive seed command is never
+used for ordinary test setup.
