@@ -6,9 +6,12 @@ may invoke the seed command.
 """
 
 from decimal import Decimal
+from io import BytesIO
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 
 from accounts.models import Address
 from orders.models import Cart, CartItem
@@ -78,6 +81,29 @@ def unavailable_product(category):
 @pytest.fixture
 def tag(db):
     return Tag.objects.create(name="bestseller", slug="bestseller")
+
+
+@pytest.fixture
+def media_root(settings, tmp_path):
+    """Point MEDIA_ROOT at a temporary folder so tests never write to ``media/``."""
+    settings.MEDIA_ROOT = tmp_path / "media"
+    return settings.MEDIA_ROOT
+
+
+def make_image_upload(
+    name="upload.png", size=(600, 800), image_format="PNG", color="#c0ffee"
+):
+    """An in-memory image upload built with Pillow — no binary fixtures."""
+    buffer = BytesIO()
+    Image.new("RGB", size, color).save(buffer, format=image_format)
+    content_type = f"image/{image_format.lower()}"
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type=content_type)
+
+
+@pytest.fixture
+def image_upload():
+    """A valid 600×800 PNG upload; call ``make_image_upload`` for variants."""
+    return make_image_upload()
 
 
 @pytest.fixture

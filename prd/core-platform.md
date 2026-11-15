@@ -99,7 +99,7 @@ Custom validators are plain functions that raise `ValidationError` — small, pu
 
 **Pagination and search.** `paginate_by = 12` on the catalog. Search is simple `icontains` over name and description; tag and category filters compose with search via querystring parameters.
 
-**Product images.** No file uploads and no media handling in the core platform (this arrives later). Each product displays a static placeholder image chosen by category; the `Product` model carries no image field.
+**Product images.** No file uploads and no media handling in the core platform (this arrives later). Each product displays a static placeholder image chosen by category; the `Product` model carries no image field. *Superseded: product images arrived in a later feature — see `prd/product-images.md`. The category placeholder remains the fallback for products without an image.*
 
 **Seed data.** A destructive, idempotent management command: `manage.py seed`. Wipes domain data and rebuilds the identical demo world: 30–35 products across 6 categories (Home Assistants — the Seraphine line, Neural Implants — the MindSync line, Neural Wearables, Accessories, Defense — home of the SoulSear directed-energy line, and Legacy Products), 40–60 orders spread across the trailing six months so the dashboard has a real time axis, and fixed demo logins documented in the README: `admin`/`admin123` (superuser), `employee`/`employee123` (staff, job title "Junior Thought Curator"), `customer`/`customer123` (with order history and a live cart), plus 8–10 background customers with orders. Product copy carries the brand voice ("She's always listening. In a good way."). Written as readable ORM Python — the seed file doubles as documentation.
 

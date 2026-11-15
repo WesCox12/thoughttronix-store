@@ -18,6 +18,7 @@
       <table class="table">
         <thead>
           <tr>
+            <th><span class="sr-only">Image</span></th>
             <th>Product</th>
             <th>Category</th>
             <th>Price</th>
@@ -28,6 +29,13 @@
         <tbody>
           {% for product in products %}
             <tr>
+              <td class="w-16">
+                <div class="size-12 overflow-hidden rounded bg-[#141824]">
+                  <img src="{{ product.display_image_url }}" alt=""
+                       width="48" height="48" loading="lazy"
+                       class="h-full w-full {% if product.image %}object-cover{% else %}object-contain{% endif %}" />
+                </div>
+              </td>
               <td>
                 <a href="{% url 'products:manage_product_update' product.pk %}"
                    class="link-hover font-semibold">{{ product.name }}</a>

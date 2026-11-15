@@ -30,6 +30,8 @@ class StyledModelForm(forms.ModelForm):
                 widget.attrs.setdefault("size", 8)
             elif isinstance(widget, forms.Select):
                 widget.attrs["class"] = "select w-full"
+            elif isinstance(widget, forms.FileInput):
+                widget.attrs["class"] = "file-input w-full"
             else:
                 widget.attrs["class"] = "input w-full"
 
@@ -52,6 +54,7 @@ class ProductForm(StyledModelForm):
             "price",
             "category",
             "tags",
+            "image",
             "is_available",
             "is_featured",
         ]

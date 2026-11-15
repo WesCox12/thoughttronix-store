@@ -7,6 +7,7 @@ from django.core.management import call_command
 from django.db import IntegrityError
 from django.urls import reverse
 from django.utils.html import escape
+from PIL import Image
 
 from orders.models import CartItem, Order, OrderItem
 
@@ -56,6 +57,58 @@ def test_product_get_absolute_url(product):
 
 def test_category_get_absolute_url(category):
     assert category.get_absolute_url() == "/categories/home-assistants/"
+
+
+# --- Product images ---------------------------------------------------------
+
+
+@pytest.fixture
+def product_with_image(product, media_root, image_upload):
+    product.image = image_upload
+    product.save()
+    return product
+
+
+def test_display_image_url_falls_back_to_category_placeholder(product):
+    assert (
+        product.display_image_url == "/static/images/placeholders/home-assistants.svg"
+    )
+
+
+def test_display_image_url_uses_the_uploaded_image(product_with_image):
+    url = product_with_image.display_image_url
+
+    assert url.startswith("/media/products/")
+    assert url == product_with_image.image.url
+
+
+@pytest.mark.parametrize("url_name", ["catalog", "detail"])
+def test_storefront_shows_placeholder_without_an_image(client, product, url_name):
+    url = (
+        reverse("products:catalog")
+        if url_name == "catalog"
+        else product.get_absolute_url()
+    )
+
+    page = client.get(url).content.decode()
+
+    assert product.display_image_url in page
+    assert "/media/" not in page
+
+
+@pytest.mark.parametrize("url_name", ["catalog", "detail"])
+def test_storefront_shows_the_uploaded_image(client, product_with_image, url_name):
+    product = product_with_image
+    url = (
+        reverse("products:catalog")
+        if url_name == "catalog"
+        else product.get_absolute_url()
+    )
+
+    page = client.get(url).content.decode()
+
+    assert product.image.url in page
+    assert product.category.placeholder_image not in page
 
 
 # --- Catalog views ---------------------------------------------------------
@@ -224,7 +277,23 @@ def test_catalog_paginates_at_twelve(client, category):
 # --- The seed command -------------------------------------------------------
 
 
-def test_seed_builds_the_demo_world(db):
+SEEDED_IMAGE_SLUGS = {
+    "calm-collar",
+    "crowdcalm-array",
+    "dreamweaver",
+    "hush",
+    "mindsync",
+    "mindsync-duo",
+    "moodset",
+    "recallpro",
+    "seraphine",
+    "soulsear-mark-ii",
+    "syncrest",
+    "veil",
+}
+
+
+def test_seed_builds_the_demo_world(db, media_root):
     call_command("seed")
 
     assert Category.objects.count() == 6
@@ -252,8 +321,19 @@ def test_seed_builds_the_demo_world(db):
     assert statuses == set(Order.Status.values)
 
 
-def test_seed_is_idempotent(db):
+def test_seed_attaches_marketings_images(db, media_root):
     call_command("seed")
+
+    with_images = Product.objects.exclude(image="")
+    assert set(with_images.values_list("slug", flat=True)) == SEEDED_IMAGE_SLUGS
+    for product in with_images:
+        with Image.open(media_root / product.image.name) as stored:
+            assert (stored.format, stored.size) == ("WEBP", (800, 800)), product.slug
+
+
+def test_seed_is_idempotent(db, media_root, django_capture_on_commit_callbacks):
+    with django_capture_on_commit_callbacks(execute=True):
+        call_command("seed")
     first = (
         Category.objects.count(),
         Tag.objects.count(),
@@ -264,7 +344,8 @@ def test_seed_is_idempotent(db):
         OrderItem.objects.count(),
     )
 
-    call_command("seed")
+    with django_capture_on_commit_callbacks(execute=True):
+        call_command("seed")
     second = (
         Category.objects.count(),
         Tag.objects.count(),
@@ -276,3 +357,6 @@ def test_seed_is_idempotent(db):
     )
 
     assert first == second
+    # The wipe's post_delete cleanup means files never accumulate.
+    assert Product.objects.exclude(image="").count() == 12
+    assert len(list((media_root / "products").iterdir())) == 12

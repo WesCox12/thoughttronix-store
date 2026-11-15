@@ -15,8 +15,10 @@ Demo logins (documented in the README):
 import random
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
+from django.core.files import File
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
@@ -25,6 +27,10 @@ from django.utils.text import slugify
 from accounts.models import Address
 from orders.models import Cart, Order, OrderItem
 from products.models import Category, Product, Tag
+
+# Marketing's product images, named by product slug: the file name *is*
+# the mapping. Products without a file keep their category placeholder.
+SEED_IMAGES_DIR = Path(__file__).resolve().parents[2] / "seed_images"
 
 TAGS = [
     "always listening",
@@ -566,6 +572,21 @@ class Command(BaseCommand):
                     category=category,
                 )
                 product.tags.set(tags[tag_name] for tag_name in tag_names)
+                self._attach_seed_image(product)
+
+    def _attach_seed_image(self, product):
+        """Attach ``seed_images/<slug>.png`` if Marketing supplied one.
+
+        Assigning and saving runs the model's processing, exactly as an
+        upload would. Validators don't run (no form is involved); the
+        committed files are known-good.
+        """
+        path = SEED_IMAGES_DIR / f"{product.slug}.png"
+        if not path.exists():
+            return
+        with path.open("rb") as source:
+            product.image = File(source, name=path.name)
+            product.save()
 
     def _create_users(self):
         User = get_user_model()

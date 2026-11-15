@@ -10,9 +10,21 @@
       <h2 class="card-title">
         {% if form.instance.pk %}Edit &ldquo;{{ form.instance.name }}&rdquo;{% else %}New product{% endif %}
       </h2>
-      <form method="post" class="mt-2 space-y-4">
+      <form method="post" enctype="multipart/form-data" class="mt-2 space-y-4">
         {% csrf_token %}
         {% for field in form %}
+          {% if field.name == "image" and saved_product %}
+            <div class="flex items-center gap-4">
+              <figure class="size-32 shrink-0 overflow-hidden rounded-box bg-[#141824]">
+                <img src="{{ saved_product.display_image_url }}" alt="Current image for {{ saved_product.name }}"
+                     width="128" height="128"
+                     class="h-full w-full {% if saved_product.image %}object-cover{% else %}object-contain{% endif %}" />
+              </figure>
+              {% if not saved_product.image %}
+                <p class="text-sm opacity-70">No image — showing the category placeholder.</p>
+              {% endif %}
+            </div>
+          {% endif %}
           {% include "products/partials/_field.html" %}
         {% endfor %}
         <div class="mt-2 flex items-center justify-end gap-2">

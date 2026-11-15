@@ -20,7 +20,14 @@ A server-rendered Django 6 storefront and back office. The PRD (`prd/core-platfo
   `job_title`). Roles are Django's own vocabulary: customers are plain users,
   employees are `is_staff`, the admin is `is_superuser`. No role field, no Groups.
 - `products/` — catalog (`Category`, `Product`, `Tag`), its back-office CRUD,
-  and the `seed` command
+  and the `seed` command. Product images (Pillow): the rules are in
+  `products/validators.py`, the form-field wiring in `products/fields.py`,
+  and processing plus file cleanup in `Product.save()` and a `post_delete`
+  receiver in `products/models.py`. Requirements: `prd/product-images.md`.
+- `products/seed_images/` — Marketing's images, named `<slug>.png`; the seed
+  attaches them
+- `media/` — uploaded files (`MEDIA_ROOT`; gitignored, served only when
+  `DEBUG` is on). Tests use the `media_root` fixture, never the real folder.
 - `orders/` — cart, checkout, orders, and back-office order management
 - `dashboard/` — the staff analytics dashboard
 - `PROMPTS.md` — the AI-usage log; append entries, never rewrite history

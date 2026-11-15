@@ -106,6 +106,15 @@ class ManageProductUpdateView(StaffRequiredMixin, SuccessMessageMixin, UpdateVie
     success_message = "“%(name)s” saved."
     extra_context = {"section": "products"}
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Preview what's stored, not the form's instance: after a rejected
+        # upload, the instance may already hold the file that was refused.
+        context["saved_product"] = Product.objects.select_related("category").get(
+            pk=self.object.pk
+        )
+        return context
+
 
 class ManageProductDeleteView(StaffRequiredMixin, SuccessMessageMixin, DeleteView):
     model = Product

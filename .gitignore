@@ -9,6 +9,10 @@ __pycache__/
 # Django
 db.sqlite3
 staticfiles/
+media/
+
+# Marketing's original image delivery (the chosen files live in products/seed_images/)
+product-images.zip
 
 # Tailwind (downloaded CLI binary and compiled CSS)
 .django_tailwind_cli/

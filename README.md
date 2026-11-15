@@ -52,6 +52,9 @@ The `seed` command creates a fixed demo world — the same one every run:
 back-office CRUD), `orders` (cart, checkout, orders — with the
 `place_order` service in `orders/services.py`), and `dashboard` (staff
 analytics, with the aggregations in `dashboard/queries.py`). Project-level
-templates live in `templates/`, static sources in `assets/`. The product
+templates live in `templates/`, static sources in `assets/`. Uploaded
+product images are stored in `media/` (gitignored, served by Django only in
+development); the seed attaches Marketing's images from
+`products/seed_images/`. The product
 requirements are in `prd/`, the phase-by-phase build plan in `plans/`, and
 `PROMPTS.md` is where AI usage on this codebase gets logged.
