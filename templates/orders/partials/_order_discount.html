@@ -1,0 +1,6 @@
+{% load humanize %}
+{# Subtotal and coupon discount above an order's total — only when discounted. #}
+{% if order.discount %}
+  <p class="text-sm opacity-70">Subtotal ${{ order.subtotal|intcomma }}</p>
+  <p class="text-sm text-success">Discount ({{ order.coupon_code }}) −${{ order.discount|intcomma }}</p>
+{% endif %}

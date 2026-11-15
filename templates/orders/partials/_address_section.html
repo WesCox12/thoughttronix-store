@@ -1,0 +1,27 @@
+{# A checkout address card: saved-address picker, fields, save checkbox. #}
+<section class="card bg-base-100 shadow-md">
+  <div class="card-body">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 class="card-title">{{ title }}</h2>
+      {% if saved_addresses %}
+        <label class="sr-only" for="saved-{{ section }}">Use a saved address</label>
+        {# A GET sends only this select's own value, never the enclosing form. #}
+        <select id="saved-{{ section }}" name="address" class="select select-sm w-full sm:w-auto"
+                hx-get="{% url 'orders:checkout_address' section %}"
+                hx-target="#{{ section }}-fields">
+          <option value="">Use a saved address…</option>
+          {% for address in saved_addresses %}
+            <option value="{{ address.pk }}">{{ address }}</option>
+          {% endfor %}
+        </select>
+      {% endif %}
+    </div>
+    <div id="{{ section }}-fields" class="grid gap-4 sm:grid-cols-2">
+      {% include "orders/partials/_address_fields.html" with fields=fields %}
+    </div>
+    <label class="label mt-2 cursor-pointer justify-start gap-2">
+      {{ save_field }}
+      <span>{{ save_field.label }}</span>
+    </label>
+  </div>
+</section>

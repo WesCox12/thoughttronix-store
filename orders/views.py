@@ -7,19 +7,34 @@ the responses carry the navbar badge as an out-of-band swap via the
 validate the form, hand everything to ``place_order``.
 """
 
+from datetime import timedelta
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.messages.views import SuccessMessageMixin
+from django.db.models import Count
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.views import View
-from django.views.generic import DetailView, FormView, ListView, TemplateView
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    DetailView,
+    FormView,
+    ListView,
+    TemplateView,
+    UpdateView,
+)
 
 from accounts.mixins import StaffRequiredMixin
+from accounts.models import Address
 from products.models import Product
 
-from .forms import CheckoutForm, OrderStatusForm
-from .models import Cart, CartItem, Order
-from .services import place_order
+from .forms import CheckoutForm, CouponForm, OrderStatusForm
+from .models import Cart, CartItem, Coupon, Order
+from .services import InvalidCoupon, place_order, quote_cart
 
 
 class CartView(LoginRequiredMixin, TemplateView):
@@ -116,16 +131,110 @@ class CheckoutView(LoginRequiredMixin, FormView):
             return redirect("orders:cart")
         return super().dispatch(request, *args, **kwargs)
 
+    def get_initial(self):
+        """Prefill both sections from the default address, if there is one.
+
+        "Save this address" starts ticked only for an empty address book,
+        so a first order builds the book without collecting one-offs later.
+        """
+        initial = super().get_initial()
+        addresses = Address.objects.filter(user=self.request.user)
+        default = addresses.filter(is_default=True).first()
+        if default:
+            initial |= default.as_initial("shipping") | default.as_initial("billing")
+        has_addresses = addresses.exists()
+        initial["save_shipping"] = initial["save_billing"] = not has_addresses
+        return initial
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["cart"] = Cart.for_user(self.request.user)
+        form = context["form"]
+        code = form["coupon_code"].value() if form.is_bound else ""
+        context |= order_summary_context(Cart.for_user(self.request.user), code)
+        context["saved_addresses"] = Address.objects.filter(user=self.request.user)
         return context
 
     def form_valid(self, form):
         cart = Cart.for_user(self.request.user)
-        order = place_order(cart, self.request.user, form.cleaned_data)
+        try:
+            order = place_order(
+                cart,
+                self.request.user,
+                form.cleaned_data,
+                coupon_code=form.cleaned_data["coupon_code"],
+            )
+        except InvalidCoupon as error:
+            # The code went bad between Apply and submit (or was never
+            # applied): nothing was placed; show why, keep every field.
+            form.add_error("coupon_code", str(error))
+            return self.form_invalid(form)
         messages.success(self.request, f"Order {order.number} placed. Thank you!")
         return redirect(reverse("orders:confirmation", kwargs={"pk": order.pk}))
+
+
+def order_summary_context(cart, coupon_code):
+    """Context for ``_order_summary.html``: the quote and the code's fate.
+
+    An unusable code falls back to the undiscounted quote, with the
+    reason in ``coupon_error`` — checkout never crashes on a bad code.
+    """
+    coupon_code = Coupon.normalize_code(coupon_code)
+    try:
+        quote = quote_cart(cart, coupon_code)
+        coupon_error = ""
+    except InvalidCoupon as error:
+        quote = quote_cart(cart)
+        coupon_error = str(error)
+    return {
+        "cart": cart,
+        "quote": quote,
+        "coupon_code": coupon_code,
+        "coupon_error": coupon_error,
+    }
+
+
+class CheckoutCouponView(LoginRequiredMixin, View):
+    """HTMX: apply (or remove) a promo code and re-render the order summary.
+
+    Only a preview — ``place_order`` re-checks the code on submit. The
+    submit button's total updates out of band.
+    """
+
+    def post(self, request):
+        context = order_summary_context(
+            Cart.for_user(request.user), request.POST.get("coupon_code", "")
+        )
+        return render(
+            request, "orders/partials/_order_summary.html", context | {"oob": True}
+        )
+
+
+class CheckoutAddressFieldsView(LoginRequiredMixin, View):
+    """HTMX: one checkout address section, filled from a saved address.
+
+    ``?address=<pk>`` picks one of the customer's own addresses (another
+    customer's pk 404s); an empty value returns the section blank. The
+    fields stay editable — the checkout POST is unchanged.
+    """
+
+    SECTIONS = ("shipping", "billing")
+
+    def get(self, request, section):
+        if section not in self.SECTIONS:
+            raise Http404("No such checkout section.")
+        initial = {}
+        pk = request.GET.get("address", "")
+        if pk:
+            if not pk.isdigit():
+                raise Http404("No such address.")
+            address = get_object_or_404(Address, pk=pk, user=request.user)
+            initial = address.as_initial(section)
+        form = CheckoutForm(initial=initial)
+        return render(
+            request,
+            "orders/partials/_address_fields.html",
+            {"fields": form.address_fields(section)},
+        )
 
 
 class OwnOrdersMixin(LoginRequiredMixin):
@@ -213,3 +322,81 @@ class UpdateOrderStatusView(StaffRequiredMixin, View):
         else:
             messages.error(request, "That isn't a status an order can have.")
         return redirect("orders:manage_order_detail", pk=order.pk)
+
+
+# --- Coupons (back office) ---------------------------------------------------
+#
+# Marketing manages coupons here without a developer: create, edit,
+# retire (and reactivate), and delete only what no order has used.
+
+
+class ManageCouponListView(StaffRequiredMixin, ListView):
+    """Every coupon with its live status and use count; ``?status=`` filters."""
+
+    template_name = "orders/manage_coupons.html"
+    context_object_name = "coupons"
+    paginate_by = 20
+    extra_context = {"section": "coupons"}
+
+    def get_queryset(self):
+        return (
+            Coupon.objects.with_status(self.request.GET.get("status", ""))
+            .annotate(order_count=Count("orders"))
+            .prefetch_related("products")
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["statuses"] = Coupon.Status.choices
+        context["active_status"] = self.request.GET.get("status", "")
+        return context
+
+
+class ManageCouponCreateView(StaffRequiredMixin, SuccessMessageMixin, CreateView):
+    model = Coupon
+    form_class = CouponForm
+    template_name = "orders/manage_coupon_form.html"
+    success_url = reverse_lazy("orders:manage_coupons")
+    success_message = "Coupon %(code)s created."
+    extra_context = {"section": "coupons"}
+
+    def get_initial(self):
+        """Starts now, runs 30 days — the common case, easy to change."""
+        now = timezone.localtime().replace(second=0, microsecond=0)
+        return {"starts_at": now, "expires_at": now + timedelta(days=30)}
+
+
+class ManageCouponUpdateView(StaffRequiredMixin, SuccessMessageMixin, UpdateView):
+    model = Coupon
+    form_class = CouponForm
+    template_name = "orders/manage_coupon_form.html"
+    success_url = reverse_lazy("orders:manage_coupons")
+    success_message = "Coupon %(code)s saved."
+    extra_context = {"section": "coupons"}
+
+
+class ManageCouponDeleteView(StaffRequiredMixin, SuccessMessageMixin, DeleteView):
+    """Delete a coupon no order has used — a used coupon 404s here.
+
+    Used coupons are retired instead; ``on_delete=PROTECT`` on
+    ``Order.coupon`` backs this up at the database level.
+    """
+
+    queryset = Coupon.objects.filter(orders__isnull=True)
+    context_object_name = "coupon"
+    template_name = "orders/manage_coupon_confirm_delete.html"
+    success_url = reverse_lazy("orders:manage_coupons")
+    success_message = "Coupon deleted."
+    extra_context = {"section": "coupons"}
+
+
+class ToggleCouponActiveView(StaffRequiredMixin, View):
+    """POST-only: retire an active coupon, or reactivate a retired one."""
+
+    def post(self, request, pk):
+        coupon = get_object_or_404(Coupon, pk=pk)
+        coupon.is_active = not coupon.is_active
+        coupon.save(update_fields=["is_active"])
+        verb = "reactivated" if coupon.is_active else "retired"
+        messages.success(request, f"Coupon {coupon.code} {verb}.")
+        return redirect("orders:manage_coupons")

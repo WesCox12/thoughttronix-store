@@ -1,0 +1,9 @@
+{% load humanize %}
+{# One order line's total cell: what was paid, with any coupon discount shown. #}
+<td class="text-right">
+  <span class="font-semibold">${{ item.line_total|intcomma }}</span>
+  {% if item.discount %}
+    <p class="text-xs opacity-60 line-through">${{ item.line_subtotal|intcomma }}</p>
+    <p class="text-xs text-success">−${{ item.discount|intcomma }} ({{ order.coupon_code }})</p>
+  {% endif %}
+</td>

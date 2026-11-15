@@ -8,7 +8,8 @@ Demo logins (documented in the README):
 
     admin / admin123        superuser
     employee / employee123  staff, "Junior Thought Curator"
-    customer / customer123  a plain customer, with order history and a live cart
+    customer / customer123  a plain customer, with order history, a live cart,
+                            and two saved addresses
 """
 
 import random
@@ -21,6 +22,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
+from accounts.models import Address
 from orders.models import Cart, Order, OrderItem
 from products.models import Category, Product, Tag
 
@@ -496,6 +498,14 @@ SEED_ADDRESSES = [
 
 CARD_LAST4S = ["4242", "4111", "1881", "0005"]
 
+# The customer demo login's address book: (label, street, line2, city,
+# state, zip). Both appear among SEED_ADDRESSES, so they match addresses
+# on seeded orders. The first becomes the default.
+CUSTOMER_ADDRESSES = [
+    ("Home", "214 Synapse Street", "", "Canyon", "TX", "79015"),
+    ("Work", "77 Cortex Lane", "Suite 300", "Amarillo", "TX", "79101"),
+]
+
 
 class Command(BaseCommand):
     help = "Wipe and rebuild the demo world: catalog, tags, and demo accounts."
@@ -506,6 +516,7 @@ class Command(BaseCommand):
         tags = self._create_tags()
         self._create_catalog(tags)
         self._create_users()
+        self._create_customer_addresses()
         self._create_customer_cart()
         self._create_orders()
 
@@ -516,6 +527,7 @@ class Command(BaseCommand):
                 f"{Product.objects.count()} products, "
                 f"{get_user_model().objects.count()} users, "
                 f"{Order.objects.count()} orders, "
+                f"{Address.objects.count()} saved addresses, "
                 f"and a live cart for 'customer'."
             )
         )
@@ -579,6 +591,22 @@ class Command(BaseCommand):
             )
             user.set_unusable_password()
             user.save()
+
+    def _create_customer_addresses(self):
+        """Two saved addresses; deleting the user on wipe cascades them."""
+        customer = get_user_model().objects.get(username="customer")
+        name = f"{customer.first_name} {customer.last_name}"
+        for label, street, line2, city, state, zip_code in CUSTOMER_ADDRESSES:
+            Address.objects.create(
+                user=customer,
+                label=label,
+                name=name,
+                street=street,
+                line2=line2,
+                city=city,
+                state=state,
+                zip=zip_code,
+            )
 
     def _create_customer_cart(self):
         customer = get_user_model().objects.get(username="customer")

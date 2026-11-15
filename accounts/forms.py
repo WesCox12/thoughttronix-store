@@ -1,6 +1,23 @@
+from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 
-from .models import User
+from .models import Address, User
+
+
+class AddressForm(forms.ModelForm):
+    """Add or edit an address-book entry; the model fields carry the rules."""
+
+    class Meta:
+        model = Address
+        fields = ["label", *Address.FIELDS]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            is_select = isinstance(field.widget, forms.Select)
+            field.widget.attrs["class"] = (
+                "select w-full" if is_select else "input w-full"
+            )
 
 
 class SignupForm(UserCreationForm):
