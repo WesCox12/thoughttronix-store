@@ -80,9 +80,7 @@ class CouponQuerySet(models.QuerySet):
             if not targets & set(product_ids):
                 names = list(coupon.products.values_list("name", flat=True))
                 if not names:
-                    raise InvalidCoupon(
-                        f"{code} was for products we no longer sell."
-                    )
+                    raise InvalidCoupon(f"{code} was for products we no longer sell.")
                 raise InvalidCoupon(
                     f"{code} applies only to {' or '.join(names)} — "
                     "add it to your cart to use this code."
@@ -159,14 +157,14 @@ class Coupon(models.Model):
     def __str__(self):
         return self.code
 
+    def save(self, *args, **kwargs):
+        self.code = self.normalize_code(self.code)
+        super().save(*args, **kwargs)
+
     @staticmethod
     def normalize_code(code):
         """Codes match case-insensitively: trimmed and uppercased."""
         return (code or "").strip().upper()
-
-    def save(self, *args, **kwargs):
-        self.code = self.normalize_code(self.code)
-        super().save(*args, **kwargs)
 
     @property
     def status(self):

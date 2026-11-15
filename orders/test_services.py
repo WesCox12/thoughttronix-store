@@ -4,14 +4,16 @@ Denormalization, cart emptying, atomicity, unavailable rejection, and
 the card_last4-only rule.
 """
 
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
+from django.utils import timezone
 
 from products.models import Product
 
-from .models import CartItem, Order, OrderItem
-from .services import place_order
+from .models import CartItem, Coupon, Order, OrderItem
+from .services import InvalidCoupon, place_order
 from .test_checkout_form import VALID_DATA
 
 
@@ -124,7 +126,32 @@ def test_a_failure_midway_leaves_no_partial_order(
     assert CartItem.objects.count() == 2
 
 
-def test_the_coupon_seam_is_accepted_and_ignored(cart, cart_item, checkout_data):
-    order = place_order(cart, cart.user, checkout_data, coupon_code="THOUGHTS10")
+# The core platform's dormant ``coupon_code`` seam ("accepted and ignored")
+# was replaced by the coupons feature: codes are now priced through
+# ``quote_cart`` and revalidated at placement (see ``orders/CLAUDE.md``).
 
-    assert order.total == Decimal("699.98")
+
+def test_an_unknown_coupon_code_is_rejected_and_nothing_is_placed(
+    cart, cart_item, checkout_data
+):
+    with pytest.raises(InvalidCoupon, match="don't recognize the code THOUGHTS10"):
+        place_order(cart, cart.user, checkout_data, coupon_code="THOUGHTS10")
+
+    assert not Order.objects.exists()
+    assert CartItem.objects.count() == 1  # the cart is intact
+
+
+def test_a_valid_coupon_is_applied_and_snapshotted(cart, cart_item, checkout_data):
+    Coupon.objects.create(
+        code="THOUGHTS10",
+        percent_off=10,
+        expires_at=timezone.now() + timedelta(days=30),
+    )
+
+    order = place_order(cart, cart.user, checkout_data, coupon_code=" thoughts10 ")
+
+    assert order.subtotal == Decimal("699.98")
+    assert order.discount == Decimal("70.00")  # 69.998, rounded half-up
+    assert order.total == Decimal("629.98")
+    assert order.coupon_code == "THOUGHTS10"  # normalized
+    assert order.items.get().discount == Decimal("70.00")

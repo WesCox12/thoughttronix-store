@@ -676,13 +676,15 @@ class Command(BaseCommand):
         """One order with denormalized addresses and purchase-time prices."""
         street, city, state, zip_code = rng.choice(SEED_ADDRESSES)
         name = f"{user.first_name} {user.last_name}"
+        subtotal = sum(
+            (product.price * quantity for product, quantity in lines),
+            Decimal("0.00"),
+        )
         order = Order.objects.create(
             user=user,
             status=status,
-            total=sum(
-                (product.price * quantity for product, quantity in lines),
-                Decimal("0.00"),
-            ),
+            subtotal=subtotal,  # seeded orders carry no coupon discount
+            total=subtotal,
             email=user.email,
             shipping_name=name,
             shipping_street=street,

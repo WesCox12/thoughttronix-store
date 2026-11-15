@@ -137,9 +137,7 @@ class CouponForm(StyledModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["products"].queryset = Product.objects.order_by("name")
-        self.fields["expires_at"].help_text = (
-            "The coupon stops working at this moment."
-        )
+        self.fields["expires_at"].help_text = "The coupon stops working at this moment."
         self.locked = bool(self.instance.pk and self.instance.is_used)
         if self.locked:
             for name in self.LOCKED_ONCE_USED:
